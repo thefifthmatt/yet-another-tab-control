@@ -71,7 +71,8 @@ namespace GrayIris.Utilities.UI.Controls
                 graphics.DrawLine(p, tabPolygon[0], tabPolygon[3]);
             }
 
-            if (!isNewTab)   //close button
+            // Modification: don't ever show this??
+            if (!isNewTab && false)   //close button
             {
                 p.Color = FromHex("#cccccc");
                 var padding = 3;
@@ -84,7 +85,8 @@ namespace GrayIris.Utilities.UI.Controls
                 var rect = new RectangleF(x, y, width, height);
                 //var fill = new SolidBrush(FromHex("#cccccc"));
                 //graphics.FillEllipse(fill, x, y, width, height);
-                graphics.DrawImage(Resources.x, rect);
+		// This is bad on recent .NET, and updating it is absolutely intolerable
+                // graphics.DrawImage(Resources.x, rect);
 
             }
             p.Dispose();

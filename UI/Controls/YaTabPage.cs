@@ -43,6 +43,11 @@ namespace GrayIris.Utilities.UI.Controls
 		}
 
 		/// <summary>
+		/// Gets or sets whether this tab should blink, if supported by the tab control.
+		/// </summary>
+		public bool Blink { get; set; }
+
+		/// <summary>
 		/// Overridden from <see cref="Panel"/>.
 		/// </summary>
 		/// <remarks>

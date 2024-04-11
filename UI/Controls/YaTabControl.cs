@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace GrayIris.Utilities.UI.Controls
@@ -60,6 +62,7 @@ namespace GrayIris.Utilities.UI.Controls
             OverIndex = -1;
             yaCloseButton = false;
             yaNewTabButton = false;
+            BlinkLoop();
         }
 
         #endregion
@@ -936,6 +939,62 @@ namespace GrayIris.Utilities.UI.Controls
         }
         #endregion
 
+        #region Blinking
+
+        public bool Blink { get; set; }
+
+        public Color BlinkColor { get; set; }
+
+        private Color yaBlinkMixColor;
+        private Color BlinkMixColor
+        {
+            get
+            {
+                return yaBlinkMixColor;
+            }
+            set
+            {
+                yaBlinkMixColor = value;
+                InU();
+            }
+        }
+
+        private async Task BlinkLoop()
+        {
+            // Similar approach to https://stackoverflow.com/questions/5042516/how-to-implement-a-blinking-label-on-a-form
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            int halfCycleMs = 1000;
+            bool midBlink = false;
+            while (true)
+            {
+                await Task.Delay(5);
+                if (!Blink)
+                {
+                    if (midBlink)
+                    {
+                        midBlink = false;
+                        BlinkMixColor = InactiveColor;
+                    }
+                    continue;
+                }
+                midBlink = true;
+                Color c1 = InactiveColor;
+                Color c2 = BlinkColor;
+                long n = sw.ElapsedMilliseconds % (halfCycleMs * 2);
+                double per = (double)Math.Abs(n - halfCycleMs) / halfCycleMs;
+                // RGB is a sqrt scale so this can't handle disparate color combos very well
+                // However, we can at least square this to make a more natural gradient.
+                per = per * per;
+                int red = (int)Math.Round((c2.R - c1.R) * per) + c1.R;
+                int grn = (int)Math.Round((c2.G - c1.G) * per) + c1.G;
+                int blw = (int)Math.Round((c2.B - c1.B) * per) + c1.B;
+                BlinkMixColor = Color.FromArgb(red, grn, blw);
+            }
+        }
+
+        #endregion
+
         #region Protected Overridden Methods
 
         /// <summary>
@@ -1012,30 +1071,34 @@ namespace GrayIris.Utilities.UI.Controls
 
             Point p;
 
-            //see if user clicked on close button
-            p = mea.Location;
-            for (int i = 0; i <= yaLastVisibleTabIndex; i++)
+            // "Fixed" thanks to https://github.com/realistschuckle/yet-another-tab-control/issues/2
+            if (CloseButton)
             {
-                var tag = this.Controls[i].Tag;
-                if (tag != null && tag.ToString() == "NEW_TAB")
+                //see if user clicked on close button
+                p = mea.Location;
+                for (int i = 0; i <= yaLastVisibleTabIndex; i++)
                 {
-                    continue;
-                }
-
-                var tabRectangle = GetTabRect(i);
-                var clickRectangle = GetRectangleClose(tabRectangle, 2);    //slightly larger target area for the mouse (x image padding)
-
-                if (clickRectangle.Contains(p))
-                {
-                    var etc = new TabClosingEventArgs();
-                    OnTabClosing(etc);
-                    if (!etc.Cancel)
+                    var tag = this.Controls[i].Tag;
+                    if (tag != null && tag.ToString() == "NEW_TAB")
                     {
-                        Controls.RemoveAt(i);
-                        InU();
-                        this.SelectedIndex = i - 1;
-                        OnTabChanged(new EventArgs());
-                        return;
+                        continue;
+                    }
+
+                    var tabRectangle = GetTabRect(i);
+                    var clickRectangle = GetRectangleClose(tabRectangle, 2);    //slightly larger target area for the mouse (x image padding)
+
+                    if (clickRectangle.Contains(p))
+                    {
+                        var etc = new TabClosingEventArgs();
+                        OnTabClosing(etc);
+                        if (!etc.Cancel)
+                        {
+                            Controls.RemoveAt(i);
+                            InU();
+                            this.SelectedIndex = i - 1;
+                            OnTabChanged(new EventArgs());
+                            return;
+                        }
                     }
                 }
             }
@@ -1264,7 +1327,7 @@ namespace GrayIris.Utilities.UI.Controls
                 }
 
                 // Paint the areas.
-                pea.Graphics.FillRectangle(yaInactiveBrush, yaTabsRectangle);
+                // pea.Graphics.FillRectangle(yaInactiveBrush, yaTabsRectangle);
                 pea.Graphics.FillRectangle(yaActiveBrush, yaClientRectangle);
 
                 // Draws the highlight/shadow line, if applicable.
@@ -1308,7 +1371,8 @@ namespace GrayIris.Utilities.UI.Controls
                         s.Width = Convert.ToSingle(yaTabLengths[i]);
                         if (i != yaSelectedIndex)
                         {
-                            yaTabDrawer.DrawTab(yaActiveColor, yaInactiveColor, yaHighlightPen.Color, yaShadowPen.Color, yaBorderPen.Color, yaHoverColor, false, i == OverIndex, yaTabDock, pea.Graphics, s, IsNewTab(i));
+                            Color tabInactive = Blink && Controls[i] is YaTabPage yp && yp.Blink ? yaBlinkMixColor : yaInactiveColor;
+                            yaTabDrawer.DrawTab(yaActiveColor, tabInactive, yaHighlightPen.Color, yaShadowPen.Color, yaBorderPen.Color, yaHoverColor, false, i == OverIndex, yaTabDock, pea.Graphics, s, IsNewTab(i));
                         }
                         else
                         {
@@ -1431,7 +1495,9 @@ namespace GrayIris.Utilities.UI.Controls
 
             // Reset the transform and draw the border.
             pea.Graphics.ResetTransform();
-            pea.Graphics.DrawRectangle(yaBorderPen, 0, 0, ClientRectangle.Width - 1, ClientRectangle.Height - 1);
+            // Edit: Don't draw around the entire thing
+            // pea.Graphics.DrawRectangle(yaBorderPen, 0, 0, ClientRectangle.Width - 1, ClientRectangle.Height - 1);
+            pea.Graphics.DrawRectangle(yaBorderPen, 0, yaClientRectangle.Y, ClientRectangle.Width - 1, ClientRectangle.Height - yaClientRectangle.Y - 1);
         }
 
         /// <summary>
